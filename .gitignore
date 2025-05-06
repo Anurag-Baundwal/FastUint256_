@@ -1,1 +1,11 @@
+# Formatting
 .clang-format
+
+# Compiled executable files
+*.exe
+
+# Compiled object files
+*.obj
+
+# Visual Studio Code specific workspace settings
+.vscode/
