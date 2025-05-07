@@ -169,104 +169,53 @@ struct FastUint256 {
   FastUint256 operator<<(size_t shift) const {
     if (shift == 0) return *this;
     if (shift >= 256) return FastUint256(); // Result is zero
-
+  
     FastUint256 result = {};
     const size_t limb_shift = shift / 64;
     const size_t bit_shift = shift % 64;
-
+  
     if (bit_shift == 0) { // Optimize for whole limb shifts
       for (size_t i = 0; i < 4 - limb_shift; ++i) {
         result.limbs[i + limb_shift] = limbs[i];
       }
     } else {
-#if FASTUINT_HAS_UINT128 // Use 128-bit integers if available
+  #if FASTUINT_HAS_UINT128 // Use 128-bit integers if available
       uint64_t carry = 0;
-      const size_t carry_shift = 64 - bit_shift;
       for (size_t i = 0; i < 4; ++i) {
         size_t target_idx = i + limb_shift;
         if (target_idx >= 4) break; // Stop if shifting out of bounds
-
-        // Combine current limb shifted left with carry from previous limb
+  
         uint128_t wide_val = ((uint128_t)limbs[i] << bit_shift) | carry;
         result.limbs[target_idx] = (uint64_t)wide_val; // Lower 64 bits
         carry = (uint64_t)(wide_val >> 64); // Upper 64 bits become next carry
       }
-      // Handle final carry if it fits in the next limb position
-      size_t final_carry_idx =
-          4 - limb_shift; // This seems off, consider i + limb_shift < 4
-      if (limb_shift <
-          4) { // If there was space for the last normally processed limb
-        size_t carry_dest_idx =
-            3 + limb_shift + 1; // Potential index for carry from limb 3
-        carry_dest_idx =
-            limb_shift + 4; // Index after the last possible target limb
-        if (carry_dest_idx < 4 &&
-            carry != 0) { // Check if carry from highest limb fits
-          // This logic is flawed. Carry needs to go into the *next* limb if
-          // available.
-        }
-        // Let's rethink the carry propagation logic slightly for the edge case
-        size_t last_target_idx =
-            3 + limb_shift; // Maximum index written to in the loop
-        if (last_target_idx < 3 &&
-            carry !=
-                0) { // If there's a limb position *after* the last one written
-          result.limbs[last_target_idx + 1] = carry;
-        }
-        // Simplified check: if the highest original limb was shifted and
-        // produced carry, and there's space
-        size_t highest_source_idx = 3;
-        size_t highest_target_idx = highest_source_idx + limb_shift;
-        if (highest_target_idx < 3 &&
-            carry != 0) { // If highest limb's result fits and has space after
-                          // it for carry
-          result.limbs[highest_target_idx + 1] = carry;
-        }
-      }
-      // --- Corrected portable shift logic for carry placement ---
-      uint64_t current_carry = 0;
-      for (size_t src_idx = 0; src_idx < 4; ++src_idx) {
-        size_t target_idx = src_idx + limb_shift;
-        if (target_idx >= 4) break; // Shifted out
-
-        uint64_t next_carry =
-            (limbs[src_idx] >>
-             (64 - bit_shift)); // Bits moving to the next limb
-        result.limbs[target_idx] =
-            (limbs[src_idx] << bit_shift) | current_carry;
-        current_carry = next_carry;
-      }
-      // Place the final carry if there's space
-      size_t final_carry_target_idx =
-          3 + limb_shift + 1; // Limb index after the highest source limb lands
-      if (final_carry_target_idx < 4 && current_carry != 0) {
-        result.limbs[final_carry_target_idx] = current_carry;
-      }
-
-#else // Portable version without __uint128_t
-      // Portable version re-implemented carefully
-      size_t target_idx = limb_shift;
-      uint64_t current_carry = 0;
-      const size_t carry_shift = 64 - bit_shift;
-
-      for (size_t src_idx = 0; src_idx < 4 && target_idx < 4; ++src_idx) {
+      // Any remaining 'carry' after the loop is an overflow beyond 256 bits and is discarded.
+      // The block that was previously here (starting with "--- Corrected portable shift logic...")
+      // has been removed as it was redundant and overwrote the uint128_t result.
+  
+  #else // Portable version without __uint128_t
+      size_t target_idx_portable = limb_shift;
+      uint64_t current_carry_portable = 0;
+      const size_t carry_shift_portable = 64 - bit_shift;
+  
+      for (size_t src_idx = 0; src_idx < 4 && target_idx_portable < 4; ++src_idx) {
         uint64_t low_part = limbs[src_idx] << bit_shift;
         uint64_t next_carry =
             (bit_shift == 0)
                 ? 0
                 : (limbs[src_idx] >>
-                   carry_shift); // Bits shifted out high become next carry
-        result.limbs[target_idx] =
+                   carry_shift_portable); // Bits shifted out high become next carry
+        result.limbs[target_idx_portable] =
             low_part |
-            current_carry; // Combine low part with carry from previous
-        current_carry = next_carry;
-        target_idx++; // Move to next target limb
+            current_carry_portable; // Combine low part with carry from previous
+        current_carry_portable = next_carry;
+        target_idx_portable++; // Move to next target limb
       }
       // Place final carry if space remains
-      if (target_idx < 4 && current_carry != 0) {
-        result.limbs[target_idx] = current_carry;
+      if (target_idx_portable < 4 && current_carry_portable != 0) {
+        result.limbs[target_idx_portable] = current_carry_portable;
       }
-#endif
+  #endif
     }
     return result;
   }
