@@ -179,7 +179,7 @@ struct FastUint256 {
         result.limbs[i + limb_shift] = limbs[i];
       }
     } else {
-#if HAS_UINT128 // Use 128-bit integers if available
+#if FASTUINT_HAS_UINT128 // Use 128-bit integers if available
       uint64_t carry = 0;
       const size_t carry_shift = 64 - bit_shift;
       for (size_t i = 0; i < 4; ++i) {
@@ -284,7 +284,7 @@ struct FastUint256 {
         result.limbs[i - limb_shift] = limbs[i];
       }
     } else {
-#if HAS_UINT128 // Use 128-bit integers if available
+#if FASTUINT_HAS_UINT128 // Use 128-bit integers if available
       uint64_t carry =
           0; // Bits shifted in from the left (more significant limb)
       const size_t carry_shift = 64 - bit_shift;
@@ -417,7 +417,7 @@ struct FastUint256 {
     carry_in = carry_out;
     result.limbs[3] =
         __builtin_addcll(limbs[3], other.limbs[3], carry_in, &carry_out);
-#elif HAS_UINT128       // Fallback to uint128 if intrinsics aren't ideal
+#elif FASTUINT_HAS_UINT128       // Fallback to uint128 if intrinsics aren't ideal
     uint128_t sum = 0;
     sum = (uint128_t)limbs[0] + other.limbs[0];
     result.limbs[0] = (uint64_t)sum;
@@ -440,7 +440,7 @@ struct FastUint256 {
           (sum_nocarry < a); // Carry if result wrapped or initial sum wrapped
     }
 #endif                  // End __ADX__ / HAS_UINT128 / Portable block
-#elif HAS_UINT128       // Primary non-intrinsic path if uint128 available
+#elif FASTUINT_HAS_UINT128       // Primary non-intrinsic path if uint128 available
     uint128_t sum = 0;
     sum = (uint128_t)limbs[0] + other.limbs[0];
     result.limbs[0] = (uint64_t)sum;
@@ -492,7 +492,7 @@ struct FastUint256 {
     borrow_in = borrow_out;
     result.limbs[3] =
         __builtin_subcll(limbs[3], other.limbs[3], borrow_in, &borrow_out);
-#elif HAS_UINT128    // Fallback to uint128 (less direct for subtraction) or
+#elif FASTUINT_HAS_UINT128    // Fallback to uint128 (less direct for subtraction) or
                      // portable
     // Portable fallback simulation is better here than forcing uint128
     uint64_t borrow_p = 0;
@@ -517,7 +517,7 @@ struct FastUint256 {
       borrow_p = (res_limb > diff_noborrow) | (diff_noborrow > a);
     }
 #endif               // End __ADX__ / HAS_UINT128 / Portable block
-#elif HAS_UINT128    // Primary non-intrinsic path if uint128 available (less
+#elif FASTUINT_HAS_UINT128    // Primary non-intrinsic path if uint128 available (less
                      // direct for subtraction)
     // Portable logic is generally cleaner for subtraction without intrinsics
     uint64_t borrow = 0;
@@ -547,7 +547,7 @@ struct FastUint256 {
   // Multiplication by a 64-bit scalar
   FastUint256 operator*(uint64_t scalar) const {
     FastUint256 result = {};
-#if HAS_UINT128
+#if FASTUINT_HAS_UINT128
     uint128_t partial_prod = 0;
     uint64_t carry = 0;
 
