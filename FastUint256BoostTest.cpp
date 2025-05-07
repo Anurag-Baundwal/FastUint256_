@@ -15,7 +15,7 @@
 #include <boost/multiprecision/detail/bitscan.hpp> // For msb/lsb if needed directly
 
 // --- Include FastUint256 header ---
-#include "fast_uint256.h"
+#include "FastUint256.h"
 
 // --- We use the namespace defined in the header ---
 using namespace my_math;

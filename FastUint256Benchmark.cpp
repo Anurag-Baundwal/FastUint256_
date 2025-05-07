@@ -15,7 +15,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 
 // --- Include FastUint256 header ---
-#include "fast_uint256.h" // Assuming it's in the same directory or include path
+#include "FastUint256.h"
 
 // --- We use the namespace defined in the FastUint256 header ---
 using namespace my_math;
