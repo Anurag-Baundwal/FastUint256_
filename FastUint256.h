@@ -326,14 +326,14 @@ struct FastUint256 {
   // --- Arithmetic Operators ---
   FastUint256 operator+(const FastUint256 &other) const {
     FastUint256 result = {};
-#if HAS_MSVC_INTRINSICS && defined(_M_X64) // Intrinsics only available on x64
+#if FASTUINT_HAS_MSVC_INTRINSICS && defined(_M_X64) // Intrinsics only available on x64
     unsigned char carry = 0;
     carry = _addcarry_u64(carry, limbs[0], other.limbs[0], &result.limbs[0]);
     carry = _addcarry_u64(carry, limbs[1], other.limbs[1], &result.limbs[1]);
     carry = _addcarry_u64(carry, limbs[2], other.limbs[2], &result.limbs[2]);
     _addcarry_u64(carry, limbs[3], other.limbs[3], &result.limbs[3]);
     // Overflow carry is discarded in standard 256-bit addition
-#elif HAS_GCC_CLANG_INTRINSICS &&                                              \
+#elif FASTUINT_HAS_GCC_CLANG_INTRINSICS &&                                              \
     defined(__x86_64__) // Intrinsics typically require x86_64
     unsigned long long carry_in = 0;
     unsigned long long carry_out = 0;
@@ -418,14 +418,14 @@ struct FastUint256 {
 
   FastUint256 operator-(const FastUint256 &other) const {
     FastUint256 result = {};
-#if HAS_MSVC_INTRINSICS && defined(_M_X64)
+#if FASTUINT_HAS_MSVC_INTRINSICS && defined(_M_X64)
     unsigned char borrow = 0;
     borrow = _subborrow_u64(borrow, limbs[0], other.limbs[0], &result.limbs[0]);
     borrow = _subborrow_u64(borrow, limbs[1], other.limbs[1], &result.limbs[1]);
     borrow = _subborrow_u64(borrow, limbs[2], other.limbs[2], &result.limbs[2]);
     _subborrow_u64(borrow, limbs[3], other.limbs[3], &result.limbs[3]);
     // Underflow borrow is discarded
-#elif HAS_GCC_CLANG_INTRINSICS && defined(__x86_64__)
+#elif FASTUINT_HAS_GCC_CLANG_INTRINSICS && defined(__x86_64__)
     unsigned long long borrow_in = 0;
     unsigned long long borrow_out = 0;
 #if defined(__ADX__) // Check if ADX instructions are expected (implies
@@ -713,15 +713,15 @@ struct FastUint256 {
   // Popcount (number of set bits)
   int popcount() const {
     int count = 0;
-#if HAS_GCC_CLANG_INTRINSICS &&                                                \
+#if FASTUINT_HAS_GCC_CLANG_INTRINSICS &&                                                \
     defined(__POPCNT__) // Check for POPCNT specifically
     count += __builtin_popcountll(limbs[0]);
     count += __builtin_popcountll(limbs[1]);
     count += __builtin_popcountll(limbs[2]);
     count += __builtin_popcountll(limbs[3]);
-#elif HAS_MSVC_INTRINSICS && defined(_M_X64) &&                                \
+#elif FASTUINT_HAS_MSVC_INTRINSICS && defined(_M_X64) &&                                \
     defined(__AVX__) // MSVC popcnt intrinsic often tied to AVX? Check docs. Or
-                     // just use __popcnt64 if defined.
+                    // just use __popcnt64 if defined.
     // Assume __popcnt64 is available if MSVC intrinsics are generally enabled
     // for x64
     count += (int)__popcnt64(limbs[0]);
@@ -744,12 +744,12 @@ struct FastUint256 {
   // Count leading zeros (from MSB)
   int clz() const {
     int count = 0;
-#if HAS_GCC_CLANG_INTRINSICS && defined(__LZCNT__) // Use lzcnt if available
+#if FASTUINT_HAS_GCC_CLANG_INTRINSICS && defined(__LZCNT__) // Use lzcnt if available
     if (limbs[3]) return __builtin_clzll(limbs[3]);
     if (limbs[2]) return 64 + __builtin_clzll(limbs[2]);
     if (limbs[1]) return 128 + __builtin_clzll(limbs[1]);
     if (limbs[0]) return 192 + __builtin_clzll(limbs[0]);
-#elif HAS_MSVC_INTRINSICS && defined(_M_X64) // Use _BitScanReverse64
+#elif FASTUINT_HAS_MSVC_INTRINSICS && defined(_M_X64) // Use _BitScanReverse64
     unsigned long index;
     if (_BitScanReverse64(&index, limbs[3])) return (int)(63 - index);
     if (_BitScanReverse64(&index, limbs[2])) return 64 + (int)(63 - index);
@@ -799,13 +799,13 @@ struct FastUint256 {
 
   // Count trailing zeros (from LSB)
   int ctz() const {
-#if HAS_GCC_CLANG_INTRINSICS &&                                                \
+#if FASTUINT_HAS_GCC_CLANG_INTRINSICS &&                                                \
     defined(__BMI__) // Use tzcnt if available (part of BMI1)
     if (limbs[0]) return __builtin_ctzll(limbs[0]);
     if (limbs[1]) return 64 + __builtin_ctzll(limbs[1]);
     if (limbs[2]) return 128 + __builtin_ctzll(limbs[2]);
     if (limbs[3]) return 192 + __builtin_ctzll(limbs[3]);
-#elif HAS_MSVC_INTRINSICS && defined(_M_X64) // Use _BitScanForward64
+#elif FASTUINT_HAS_MSVC_INTRINSICS && defined(_M_X64) // Use _BitScanForward64
     unsigned long index;
     if (_BitScanForward64(&index, limbs[0])) return (int)index;
     if (_BitScanForward64(&index, limbs[1])) return 64 + (int)index;
