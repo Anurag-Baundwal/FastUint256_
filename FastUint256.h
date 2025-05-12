@@ -565,6 +565,129 @@ struct FastUint256 {
     return result;
   }
 
+  // Full 256-bit by 256-bit multiplication
+  FastUint256 operator*(const FastUint256 &other) const {
+    FastUint256 result = {};
+
+  #if FASTUINT_HAS_UINT128
+    // Implements Schoolbook multiplication algorithm (optimized for 256-bit result):
+    // For each result limb R[i] (where i = 0 to 3):
+    // 1. Start with carry C_in from calculation of R[i-1]. Let Sum = C_in.
+    // 2. Initialize HighPartsSum = 0.
+    // 3. For each product p_jk = limbs[j] * other.limbs[k] where j+k=i:
+    //    a. Add low part to sum: Sum += lo(p_jk)
+    //    b. Add high part to high-parts accumulator: HighPartsSum += hi(p_jk)
+    // 4. R[i] = lo(Sum)
+    // 5. Carry-out C_out for next stage = hi(Sum) + HighPartsSum.
+
+    uint128_t current_limb_sum = 0; // Holds Sum (C_in + sum(lo(p_jk))) for the current result limb calculation.
+                                    // After calculating R[i], it's updated to hold C_out(i) (the Carry-in for R[i+1]).
+    uint128_t product_high_parts_sum = 0; // Holds HighPartsSum (sum(hi(p_jk))) for the products contributing to the current R[i]. Reset for each i.
+
+    // --- Calculate result.limbs[0] (i=0) ---
+    // Carry-in C_in(-1) is 0. Only product is p00.
+    // General Pattern applied to i=0:
+    //   current_limb_sum = 0; // C_in(-1)
+    //   product_high_parts_sum = 0;
+    //   uint128_t p00 = (uint128_t)limbs[0] * other.limbs[0];
+    //   current_limb_sum += (uint64_t)p00;       // Sum = 0 + lo(p00)
+    //   product_high_parts_sum += (p00 >> 64); // HighPartsSum = 0 + hi(p00)
+    //   result.limbs[0] = (uint64_t)current_limb_sum; // R[0] = lo(p00)
+    //   current_limb_sum = (current_limb_sum >> 64) + product_high_parts_sum; // C_out(0) = (lo(p00)>>64) + hi(p00) = 0 + hi(p00)
+    // Shortcut: Directly calculate R[0] and C_out(0) for the i=0 case.
+    uint128_t p00 = (uint128_t)limbs[0] * other.limbs[0];
+    result.limbs[0] = (uint64_t)p00;          // R[0] = lo(p00)
+    current_limb_sum = (p00 >> 64);           // Initialize current_limb_sum with C_out(0) = hi(p00) (Carry-in for R[1])
+
+
+    // --- Calculate result.limbs[1] (i=1) ---
+    // Carry-in C_in(0) is already in current_limb_sum.
+    // Products: p01, p10
+    product_high_parts_sum = 0; // Reset high parts sum for this stage
+
+    uint128_t p01 = (uint128_t)limbs[0] * other.limbs[1];
+    uint128_t p10 = (uint128_t)limbs[1] * other.limbs[0];
+
+    // Accumulate Sum_1 = C_in(0) + lo(p01) + lo(p10)
+    current_limb_sum += (uint64_t)p01;
+    current_limb_sum += (uint64_t)p10;
+
+    // Accumulate product_high_parts_sum = hi(p01) + hi(p10)
+    product_high_parts_sum = (p01 >> 64);  // First term, equivalent to 0 + hi(p01) since product_high_parts_sum was 0
+    product_high_parts_sum += (p10 >> 64); // Add subsequent terms
+
+    // Assign result limb and calculate Carry-out C_out(1) (Carry-in for R[2])
+    result.limbs[1] = (uint64_t)current_limb_sum; // R[1] = lo(Sum_1)
+    current_limb_sum = (current_limb_sum >> 64) + product_high_parts_sum; // C_out(1) = hi(Sum_1) + product_high_parts_sum
+
+
+    // --- Calculate result.limbs[2] (i=2) ---
+    // Carry-in C_in(1) is in current_limb_sum.
+    // Products: p02, p11, p20
+    product_high_parts_sum = 0; // Reset high parts sum for this stage
+
+    uint128_t p02 = (uint128_t)limbs[0] * other.limbs[2];
+    uint128_t p11 = (uint128_t)limbs[1] * other.limbs[1];
+    uint128_t p20 = (uint128_t)limbs[2] * other.limbs[0];
+
+    // Accumulate Sum_2 = C_in(1) + lo(p02) + lo(p11) + lo(p20)
+    current_limb_sum += (uint64_t)p02;
+    current_limb_sum += (uint64_t)p11;
+    current_limb_sum += (uint64_t)p20;
+
+    // Accumulate product_high_parts_sum = hi(p02) + hi(p11) + hi(p20)
+    product_high_parts_sum = (p02 >> 64);  // First term
+    product_high_parts_sum += (p11 >> 64); // Subsequent terms
+    product_high_parts_sum += (p20 >> 64);
+
+    // Assign result limb and calculate Carry-out C_out(2) (Carry-in for R[3])
+    result.limbs[2] = (uint64_t)current_limb_sum; // R[2] = lo(Sum_2)
+    current_limb_sum = (current_limb_sum >> 64) + product_high_parts_sum; // C_out(2) = hi(Sum_2) + product_high_parts_sum
+
+
+    // --- Calculate result.limbs[3] (i=3) ---
+    // Carry-in C_in(2) is in current_limb_sum.
+    // Products: p03, p12, p21, p30
+    // We only need R[3], not the final carry C_out(3), so calculating product_high_parts_sum is unnecessary here.
+    // product_high_parts_sum = 0; // Not strictly needed
+
+    uint128_t p03 = (uint128_t)limbs[0] * other.limbs[3];
+    uint128_t p12 = (uint128_t)limbs[1] * other.limbs[2];
+    uint128_t p21 = (uint128_t)limbs[2] * other.limbs[1];
+    uint128_t p30 = (uint128_t)limbs[3] * other.limbs[0];
+
+    // Accumulate Sum_3 = C_in(2) + lo(p03) + lo(p12) + lo(p21) + lo(p30)
+    current_limb_sum += (uint64_t)p03;
+    current_limb_sum += (uint64_t)p12;
+    current_limb_sum += (uint64_t)p21;
+    current_limb_sum += (uint64_t)p30;
+
+    // Assign final result limb. The final carry C_out(3) = (current_limb_sum >> 64) + sum(hi(p_jk)) is discarded.
+    result.limbs[3] = (uint64_t)current_limb_sum; // R[3] = lo(Sum_3)
+
+  #else // Portable fallback
+
+    // Uses existing FastUint256 * uint64_t, operator<<, and operator+
+    // Conceptually calculates: result = (A * b0) + ((A * b1) << 64) + ((A * b2) << 128) + ((A * b3) << 192)
+    // where A is *this and B is other (b0..b3 are limbs of other).
+    FastUint256 term0 = (*this) * other.limbs[0];
+    FastUint256 term1 = ((*this) * other.limbs[1]) << 64;
+    FastUint256 term2 = ((*this) * other.limbs[2]) << 128;
+    FastUint256 term3 = ((*this) * other.limbs[3]) << 192;
+
+    result = term0 + term1 + term2 + term3;
+
+    // WARNING: This portable fallback is simpler to write but likely less
+    // efficient than a direct portable implementation of the schoolbook
+    // algorithm using portable 64x64->128 multiplies (like the one used
+    // in operator*(uint64_t)). This version involves multiple full 256-bit
+    // additions and shifts. The __uint128_t version is strongly preferred
+    // for performance when available.
+
+  #endif // FASTUINT_HAS_UINT128
+    return result;
+  }
+
   FastUint256 &operator+=(const FastUint256 &other) {
     *this = *this + other;
     return *this;
@@ -575,6 +698,10 @@ struct FastUint256 {
   }
   FastUint256 &operator*=(uint64_t scalar) {
     *this = *this * scalar;
+    return *this;
+  }
+  FastUint256 &operator*=(const FastUint256 &other) {
+    *this = *this * other;
     return *this;
   }
 
